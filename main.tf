@@ -1,13 +1,12 @@
-#initialize resource group for my web application matchin
+#initialize resource group for my web application machine
 resource "azurerm_resource_group" "webApp" {
   name     = "${var.webAppPrefix}-resources"
   location = var.location
 }
 
-locals {
-  instance_count = 2
-}
-#creating vnet
+
+
+#creating  all the environment 
 resource "azurerm_virtual_network" "vnet" {
   name                = "vnet"
   address_space       = var.vnet_address_space
@@ -15,13 +14,15 @@ resource "azurerm_virtual_network" "vnet" {
   resource_group_name = azurerm_resource_group.webApp.name
 }
 
-#creating subnet
+
 resource "azurerm_subnet" "internal" {
   name                 = "internal"
   resource_group_name  = azurerm_resource_group.webApp.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.2.0/24"]
 }
+
+
 
 resource "azurerm_lb_probe" "lbProb" {
   resource_group_name = azurerm_resource_group.webApp.name
@@ -38,18 +39,7 @@ resource "azurerm_public_ip" "pip" {
   sku                 = "Standard"
 }
 
-resource "azurerm_network_interface" "webApp" {
-  count               = local.instance_count
-  name                = "${var.webAppPrefix}-nic${count.index}"
-  resource_group_name = azurerm_resource_group.webApp.name
-  location            = azurerm_resource_group.webApp.location
 
-  ip_configuration {
-    name                          = "primary"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Dynamic"
-  }
-}
 
 resource "azurerm_availability_set" "avset" {
   name                         = "${var.webAppPrefix}avset"
@@ -77,9 +67,13 @@ resource "azurerm_network_security_group" "webserver" {
   }
 }
 
+resource "azurerm_subnet_network_security_group_association" "webApp" {
+  subnet_id                 = azurerm_subnet.internal.id
+  network_security_group_id = azurerm_network_security_group.webserver.id
+}
 
-# Module      : APPLICATION LOAD BALANCER
-# Description : This terraform module is used to create ALB on Azure.
+
+
 resource "azurerm_lb" "LB" {
   name                = "${var.webAppPrefix}-lb"
   location            = azurerm_resource_group.webApp.location
@@ -112,62 +106,22 @@ resource "azurerm_network_interface_backend_address_pool_association" "NIbackend
   count                   = local.instance_count
   backend_address_pool_id = azurerm_lb_backend_address_pool.backendpool.id
   ip_configuration_name   = "primary"
-  network_interface_id    = element(azurerm_network_interface.webApp.*.id, count.index)
+  network_interface_id    = element(local.webAppInterface.*.id, count.index)
 }
 
-resource "azurerm_linux_virtual_machine" "webApp" {
-  count                           = local.instance_count
-  name                            = "${var.webAppPrefix}-vm${count.index}"
-  resource_group_name             = azurerm_resource_group.webApp.name
-  location                        = azurerm_resource_group.webApp.location
-  size                            = "Standard_b1ls"
-  admin_username                  = var.admin_username
-  admin_password                  = var.admin_password
-  availability_set_id             = azurerm_availability_set.avset.id
-  disable_password_authentication = false
-  network_interface_ids = [
-    azurerm_network_interface.webApp[count.index].id,
-  ]
+# Module      : APPLICATION VIRTUAL MACHIN 
+# Description : This terraform module is used to create VM on Azure.
 
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "16.04-LTS"
-    version   = "latest"
-  }
+module "webApp" {
+    source = "./modules/WEBAPP"
+    availability_set_id  = azurerm_availability_set.avset.id
+    admin_username  = var.admin_username
+    admin_password   = var.admin_password
+    subnetID = azurerm_subnet.internal.id
 
-  os_disk {
-    storage_account_type = "Standard_LRS"
-    caching              = "ReadWrite"
-  }
 }
 
-resource "azurerm_subnet_network_security_group_association" "example" {
-  subnet_id                 = azurerm_subnet.internal.id
-  network_security_group_id = azurerm_network_security_group.webserver.id
+locals {
+  webAppInterface = module.webApp.interface
+  instance_count = var.instance_count
 }
-
-
-
-
-# resource "azurerm_public_ip" "natPip" {
-#   name                = "nat-pip"
-#   resource_group_name = azurerm_resource_group.webApp.name
-#   location            = azurerm_resource_group.webApp.location
-#   allocation_method   = "Static"
-#   sku                 = "Standard"
-# }
-
-# resource "azurerm_nat_gateway" "example" {
-#   name                    = "nat-Gateway"
-#   location                = azurerm_resource_group.webApp.location
-#   resource_group_name     = azurerm_resource_group.webApp.name
-#   public_ip_address_ids   = [azurerm_public_ip.natPip.id]
-#   sku_name                = "Standard"
-#   idle_timeout_in_minutes = 10
-# }
-
-# resource "azurerm_subnet_nat_gateway_association" "example" {
-#   subnet_id      = azurerm_subnet.internal.id
-#   nat_gateway_id = azurerm_nat_gateway.example.id
-# }

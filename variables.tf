@@ -1,3 +1,4 @@
+#all saved vars that i am reusing on my main code
 variable "webAppPrefix" {
   description = "The prefix which should be used for all resources connected to the web app."
   default = "WA"
@@ -28,5 +29,9 @@ variable "storage_account_name" {
 variable "storage_container_name" {
   type        = string
   description = "container_blob_name"
+}
+variable "instance_count" {
+  description = "the amount of machines that will be created"
+  default = 2
 }
 

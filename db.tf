@@ -1,7 +1,11 @@
+#initialize resource group for my Data Base application machine
+
 resource "azurerm_resource_group" "DB" {
   name     = "${var.DBPrefix}-resources"
   location = var.location
 }
+
+#creating  all the environment 
 
 resource "azurerm_subnet" "DB" {
   name                 = "DBVnet"
@@ -35,25 +39,13 @@ resource "azurerm_network_interface" "DB" {
 }
 
 
-resource "azurerm_linux_virtual_machine" "DB-VM" {
-  name                            = "DB-VM"
-  resource_group_name             = azurerm_resource_group.DB.name
-  location                        = azurerm_resource_group.DB.location
-  size                            = "Standard_b1ls"
+# Module      : APPLICATION VIRTUAL MACHIN 
+# Description : This terraform module is used to create VM on Azure.
+
+module "DB-VM" {
+  source = "./modules/DB"
   admin_username                  = var.admin_username
   admin_password                  = var.admin_password
-  disable_password_authentication = false
   network_interface_ids           = [azurerm_network_interface.DB.id]
 
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "16.04-LTS"
-    version   = "latest"
-  }
-
-  os_disk {
-    storage_account_type = "Standard_LRS"
-    caching              = "ReadWrite"
-  }
 }
