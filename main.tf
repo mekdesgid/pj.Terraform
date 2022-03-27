@@ -1,4 +1,4 @@
-
+#initialize resource group for my web application matchin
 resource "azurerm_resource_group" "webApp" {
   name     = "${var.webAppPrefix}-resources"
   location = var.location
@@ -7,7 +7,7 @@ resource "azurerm_resource_group" "webApp" {
 locals {
   instance_count = 2
 }
-
+#creating vnet
 resource "azurerm_virtual_network" "vnet" {
   name                = "vnet"
   address_space       = var.vnet_address_space
@@ -15,6 +15,7 @@ resource "azurerm_virtual_network" "vnet" {
   resource_group_name = azurerm_resource_group.webApp.name
 }
 
+#creating subnet
 resource "azurerm_subnet" "internal" {
   name                 = "internal"
   resource_group_name  = azurerm_resource_group.webApp.name
@@ -22,9 +23,9 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = ["10.0.2.0/24"]
 }
 
-resource "azurerm_lb_probe" "example" {
+resource "azurerm_lb_probe" "lbProb" {
   resource_group_name = azurerm_resource_group.webApp.name
-  loadbalancer_id     = azurerm_lb.example.id
+  loadbalancer_id     = azurerm_lb.LB.id
   name                = "http-running-probe"
   port                = 8080
 }
@@ -76,7 +77,10 @@ resource "azurerm_network_security_group" "webserver" {
   }
 }
 
-resource "azurerm_lb" "example" {
+
+# Module      : APPLICATION LOAD BALANCER
+# Description : This terraform module is used to create ALB on Azure.
+resource "azurerm_lb" "LB" {
   name                = "${var.webAppPrefix}-lb"
   location            = azurerm_resource_group.webApp.location
   resource_group_name = azurerm_resource_group.webApp.name
@@ -87,26 +91,26 @@ resource "azurerm_lb" "example" {
   }
 }
 
-resource "azurerm_lb_backend_address_pool" "example" {
-  loadbalancer_id = azurerm_lb.example.id
+resource "azurerm_lb_backend_address_pool" "backendpool" {
+  loadbalancer_id = azurerm_lb.LB.id
   name            = "BackEndAddressPool"
 }
 
-resource "azurerm_lb_rule" "example" {
+resource "azurerm_lb_rule" "LBRule" {
   resource_group_name            = azurerm_resource_group.webApp.name
-  loadbalancer_id                = azurerm_lb.example.id
+  loadbalancer_id                = azurerm_lb.LB.id
   name                           = "LBRule"
   protocol                       = "Tcp"
   frontend_port                  = 8080
   backend_port                   = 8080
   frontend_ip_configuration_name = "PublicIPAddress"
-  backend_address_pool_id       = azurerm_lb_backend_address_pool.example.id
-  probe_id                       = azurerm_lb_probe.example.id
+  backend_address_pool_id       = azurerm_lb_backend_address_pool.backendpool.id
+  probe_id                       = azurerm_lb_probe.lbProb.id
 }
 
-resource "azurerm_network_interface_backend_address_pool_association" "example" {
+resource "azurerm_network_interface_backend_address_pool_association" "NIbackendPool" {
   count                   = local.instance_count
-  backend_address_pool_id = azurerm_lb_backend_address_pool.example.id
+  backend_address_pool_id = azurerm_lb_backend_address_pool.backendpool.id
   ip_configuration_name   = "primary"
   network_interface_id    = element(azurerm_network_interface.webApp.*.id, count.index)
 }
